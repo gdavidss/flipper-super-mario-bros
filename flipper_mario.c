@@ -878,8 +878,30 @@ typedef struct App {
 } App;
 
 static App* g_app = NULL;
+#define SLIDER_MAX 5  // 0..5 inclusive = 6 steps, bar shows 5 cells full at 5
+
+// Convert a 0..SLIDER_MAX slider value to a linear 0..1 amplitude.
+static inline float vol_for_level(uint8_t lvl) {
+    if(lvl > SLIDER_MAX) lvl = SLIDER_MAX;
+    return (float)lvl / (float)SLIDER_MAX;
+}
+static void apply_audio_settings(Game* g) {
+    if(!g_app) return;
+    g_app->sound.music_volume = vol_for_level(g->music_vol);
+    g_app->sound.sfx_volume   = vol_for_level(g->sfx_vol);
+}
+
+static void start_music(void) {
+    if(!g_app) return;
+    apply_audio_settings(&g_app->game);
+    if(g_app->game.music_vol > 0)
+        sound_set_music(&g_app->sound, music_overworld, MUSIC_OVERWORLD_LEN);
+    else
+        sound_stop_music(&g_app->sound);
+}
+
 static void sfx(SfxId id) {
-    if(!g_app || !g_app->game.sfx_on) return;
+    if(!g_app || g_app->game.sfx_vol == 0) return;
     sound_play_sfx(&g_app->sound, id);
 }
 
@@ -906,21 +928,21 @@ static void game_init(Game* g) {
     g->menu_page = MENU_MAIN;
     g->menu_cursor = 0;
     g->lives = 3;
-    g->music_on = true;
-    g->sfx_on = true;
+    g->music_vol = 4;
+    g->sfx_vol = 4;
     load_level(g, 0);
 }
 
 static void game_restart(Game* g) {
     // Preserve user settings + carry-over lives/score across the wipe.
-    bool music_on = g->music_on;
-    bool sfx_on = g->sfx_on;
+    uint8_t music_vol = g->music_vol;
+    uint8_t sfx_vol = g->sfx_vol;
     uint8_t lives = g->lives;
     uint16_t score = g->score;
     memset(g, 0, sizeof(*g));
     g->scene = SCENE_PLAY;
-    g->music_on = music_on;
-    g->sfx_on = sfx_on;
+    g->music_vol = music_vol;
+    g->sfx_vol = sfx_vol;
     g->lives = lives ? lives : 3;
     g->score = score;
     load_level(g, 0);  // start over at the first level
@@ -959,8 +981,8 @@ static void menu_activate(Game* g) {
         }
     } else if(g->menu_page == MENU_SETTINGS) {
         switch(g->menu_cursor) {
-        case 0: g->music_on = !g->music_on; break;
-        case 1: g->sfx_on = !g->sfx_on; break;
+        case 0: g->music_vol = (g->music_vol + 1) % (SLIDER_MAX + 1); apply_audio_settings(g); break;
+        case 1: g->sfx_vol   = (g->sfx_vol   + 1) % (SLIDER_MAX + 1); apply_audio_settings(g); break;
         case 2: // Back
             g->menu_page = MENU_MAIN;
             g->menu_cursor = 2;
@@ -983,6 +1005,15 @@ switch(g->scene) {
             if(g->btn_pressed & BIT_UP)   g->menu_cursor = (g->menu_cursor + n - 1) % n;
             if(g->btn_pressed & BIT_DOWN) g->menu_cursor = (g->menu_cursor + 1) % n;
         }
+        // In settings, Left/Right adjusts the focused slider (not Back row).
+        if(g->menu_page == MENU_SETTINGS && g->menu_cursor < 2) {
+            uint8_t* tgt = g->menu_cursor == 0 ? &g->music_vol : &g->sfx_vol;
+            bool changed = false;
+            if(g->btn_pressed & BIT_LEFT)  { if(*tgt > 0)          { (*tgt)--; changed = true; } }
+            if(g->btn_pressed & BIT_RIGHT) { if(*tgt < SLIDER_MAX) { (*tgt)++; changed = true; } }
+            if(changed) apply_audio_settings(g);
+        }
+
         if(g->btn_pressed & BIT_OK) {
             menu_activate(g);
         }
