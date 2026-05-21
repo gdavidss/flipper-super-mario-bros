@@ -32,6 +32,22 @@
 #include "level_4_2.h"
 #include "level_4_3.h"
 #include "level_4_4.h"
+#include "level_5_1.h"
+#include "level_5_2.h"
+#include "level_5_3.h"
+#include "level_5_4.h"
+#include "level_6_1.h"
+#include "level_6_2.h"
+#include "level_6_3.h"
+#include "level_6_4.h"
+#include "level_7_1.h"
+#include "level_7_2.h"
+#include "level_7_3.h"
+#include "level_7_4.h"
+#include "level_8_1.h"
+#include "level_8_2.h"
+#include "level_8_3.h"
+#include "level_8_4.h"
 #include "sound.h"
 
 // Runtime tile grid (one definition for the whole app).
@@ -56,6 +72,22 @@ static const Level levels[] = {
     { "4-2", 400, level_4_2_src, LEVEL_4_2_ENEMY_COUNT, enemy_spawns_4_2 },
     { "4-3", 300, level_4_3_src, LEVEL_4_3_ENEMY_COUNT, enemy_spawns_4_3 },
     { "4-4", 300, level_4_4_src, LEVEL_4_4_ENEMY_COUNT, enemy_spawns_4_4 },
+    { "5-1", 400, level_5_1_src, LEVEL_5_1_ENEMY_COUNT, enemy_spawns_5_1 },
+    { "5-2", 400, level_5_2_src, LEVEL_5_2_ENEMY_COUNT, enemy_spawns_5_2 },
+    { "5-3", 300, level_5_3_src, LEVEL_5_3_ENEMY_COUNT, enemy_spawns_5_3 },
+    { "5-4", 300, level_5_4_src, LEVEL_5_4_ENEMY_COUNT, enemy_spawns_5_4 },
+    { "6-1", 400, level_6_1_src, LEVEL_6_1_ENEMY_COUNT, enemy_spawns_6_1 },
+    { "6-2", 400, level_6_2_src, LEVEL_6_2_ENEMY_COUNT, enemy_spawns_6_2 },
+    { "6-3", 300, level_6_3_src, LEVEL_6_3_ENEMY_COUNT, enemy_spawns_6_3 },
+    { "6-4", 300, level_6_4_src, LEVEL_6_4_ENEMY_COUNT, enemy_spawns_6_4 },
+    { "7-1", 400, level_7_1_src, LEVEL_7_1_ENEMY_COUNT, enemy_spawns_7_1 },
+    { "7-2", 400, level_7_2_src, LEVEL_7_2_ENEMY_COUNT, enemy_spawns_7_2 },
+    { "7-3", 300, level_7_3_src, LEVEL_7_3_ENEMY_COUNT, enemy_spawns_7_3 },
+    { "7-4", 300, level_7_4_src, LEVEL_7_4_ENEMY_COUNT, enemy_spawns_7_4 },
+    { "8-1", 400, level_8_1_src, LEVEL_8_1_ENEMY_COUNT, enemy_spawns_8_1 },
+    { "8-2", 400, level_8_2_src, LEVEL_8_2_ENEMY_COUNT, enemy_spawns_8_2 },
+    { "8-3", 300, level_8_3_src, LEVEL_8_3_ENEMY_COUNT, enemy_spawns_8_3 },
+    { "8-4", 300, level_8_4_src, LEVEL_8_4_ENEMY_COUNT, enemy_spawns_8_4 },
 };
 #define NUM_LEVELS ((int)(sizeof(levels) / sizeof(Level)))
 
