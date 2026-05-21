@@ -217,6 +217,7 @@ typedef struct Game {
     uint8_t  btn_pressed; // edge-triggered, cleared each frame after consumption
 
     // UI state
+    bool     confirm_quit;
     MenuPage menu_page;
     uint8_t  menu_cursor;       // selected row in current menu page
 
@@ -1054,7 +1055,16 @@ static void menu_activate(Game* g) {
 static void game_step(Game* g) {
     Scene before = g->scene;
     g->frame++;
-switch(g->scene) {
+    if(g->confirm_quit) {
+        if(g->btn_pressed & BIT_OK) {
+            if(g_app) g_app->running = false;
+        } else if(g->btn_pressed & BIT_BACK) {
+            g->confirm_quit = false;
+        }
+        g->btn_pressed = 0;
+        return;
+    }
+    switch(g->scene) {
     case SCENE_TITLE: {
         int n = menu_count(g->menu_page);
         if(n > 0) {
@@ -1293,7 +1303,13 @@ int32_t flipper_mario_app(void* p) {
                     app->game.btn_pressed |= (1 << ev.key);
                 } else if(ev.type == InputTypeRelease) {
                     app->game.btn_held &= ~(1 << ev.key);
-
+                } else if(ev.type == InputTypeLong && ev.key == InputKeyOk) {
+                    // Hold OK to open quit confirm. Swallow the still-held OK
+                    // so the overlay doesn't immediately register an answer.
+                    app->game.confirm_quit = true;
+                    app->game.btn_held    &= ~BIT_OK;
+                    app->game.btn_pressed &= ~BIT_OK;
+                }
                 furi_mutex_release(app->mutex);
             }
         }
