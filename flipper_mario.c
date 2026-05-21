@@ -11,6 +11,8 @@
 #include <furi.h>
 #include <gui/gui.h>
 #include <input/input.h>
+#include <notification/notification.h>
+#include <notification/notification_messages.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -218,9 +220,11 @@ typedef struct Game {
     MenuPage menu_page;
     uint8_t  menu_cursor;       // selected row in current menu page
 
-    // Settings
-    bool     music_on;
-    bool     sfx_on;
+    // Settings (5-level scales, 0 = off)
+    uint8_t  music_vol;     // 0..4
+    uint8_t  sfx_vol;       // 0..4
+    uint8_t  brightness;    // 0..4 (notification ForceDisplayBrightnessSetting)
+    uint8_t  brightness_applied; // last value sent to notification record
     uint8_t  gameover_timer;    // counts up; auto-returns to menu when full
 } Game;
 
@@ -872,12 +876,18 @@ static void render(Canvas* canvas, void* ctx);
 typedef struct App {
     Game game;
     Sound sound;
+    NotificationApp* notifications;
     FuriMessageQueue* events;
     FuriMutex* mutex;
     bool running;
 } App;
 
 static App* g_app = NULL;
+static void sfx(SfxId id) {
+    if(!g_app || g_app->game.sfx_vol == 0) return;
+    sound_play_sfx(&g_app->sound, id);
+}
+
 #define SLIDER_MAX 5  // 0..5 inclusive = 6 steps, bar shows 5 cells full at 5
 
 // Convert a 0..SLIDER_MAX slider value to a linear 0..1 amplitude.
@@ -885,6 +895,7 @@ static inline float vol_for_level(uint8_t lvl) {
     if(lvl > SLIDER_MAX) lvl = SLIDER_MAX;
     return (float)lvl / (float)SLIDER_MAX;
 }
+
 static void apply_audio_settings(Game* g) {
     if(!g_app) return;
     g_app->sound.music_volume = vol_for_level(g->music_vol);
@@ -900,12 +911,25 @@ static void start_music(void) {
         sound_stop_music(&g_app->sound);
 }
 
-static void sfx(SfxId id) {
-    if(!g_app || g_app->game.sfx_vol == 0) return;
-    sound_play_sfx(&g_app->sound, id);
+// Apply screen brightness via the notification service. We push the
+// ForceDisplayBrightnessSetting message onto the *internal* (permanent)
+// layer so the value sticks until we change it again or the app exits.
+static NotificationMessage s_brightness_msg = {
+    .type = NotificationMessageTypeForceDisplayBrightnessSetting,
+    .data = { .forced_settings = { .display_brightness = 1.0f } },
+};
+static const NotificationSequence s_brightness_seq = {
+    &s_brightness_msg, NULL,
+};
+static void apply_brightness(Game* g, NotificationApp* n) {
+    if(!n) return;
+    if(g->brightness == g->brightness_applied) return;
+    g->brightness_applied = g->brightness;
+    float v = vol_for_level(g->brightness);
+    if(v < 0.15f) v = 0.15f;  // never go below ~15% (screen would be unreadable)
+    s_brightness_msg.data.forced_settings.display_brightness = v;
+    notification_internal_message_block(n, &s_brightness_seq);
 }
-
-
 
 
 // --- Game lifecycle --------------------------------------------------------
@@ -928,8 +952,10 @@ static void game_init(Game* g) {
     g->menu_page = MENU_MAIN;
     g->menu_cursor = 0;
     g->lives = 3;
-    g->music_vol = 4;
+    g->music_vol = 4;     // ~80%
     g->sfx_vol = 4;
+    g->brightness = 5;    // full bright
+    g->brightness_applied = 0xFF;
     load_level(g, 0);
 }
 
@@ -937,12 +963,16 @@ static void game_restart(Game* g) {
     // Preserve user settings + carry-over lives/score across the wipe.
     uint8_t music_vol = g->music_vol;
     uint8_t sfx_vol = g->sfx_vol;
+    uint8_t brightness = g->brightness;
+    uint8_t brightness_applied = g->brightness_applied;
     uint8_t lives = g->lives;
     uint16_t score = g->score;
     memset(g, 0, sizeof(*g));
     g->scene = SCENE_PLAY;
     g->music_vol = music_vol;
     g->sfx_vol = sfx_vol;
+    g->brightness = brightness;
+    g->brightness_applied = brightness_applied;
     g->lives = lives ? lives : 3;
     g->score = score;
     load_level(g, 0);  // start over at the first level
@@ -952,7 +982,7 @@ static void game_restart(Game* g) {
 
 // Menu helpers
 #define MENU_MAIN_ITEMS     4   // Start, Controls, Settings, Quit
-#define MENU_SETTINGS_ITEMS 3   // Music, SFX, Brightness, Back
+#define MENU_SETTINGS_ITEMS 4   // Music, SFX, Brightness, Back
 
 static int menu_count(MenuPage p) {
     if(p == MENU_MAIN)     return MENU_MAIN_ITEMS;
@@ -980,10 +1010,17 @@ static void menu_activate(Game* g) {
             break;
         }
     } else if(g->menu_page == MENU_SETTINGS) {
+        // OK on sliders cycles the value forward (wraps 0..SLIDER_MAX);
+        // OK on Back exits. Volume changes never (re)start music here -
+        // the title screen has no music, only SCENE_PLAY does.
         switch(g->menu_cursor) {
-        case 0: g->music_vol = (g->music_vol + 1) % (SLIDER_MAX + 1); apply_audio_settings(g); break;
-        case 1: g->sfx_vol   = (g->sfx_vol   + 1) % (SLIDER_MAX + 1); apply_audio_settings(g); break;
-        case 2: // Back
+        case 0: g->music_vol  = (g->music_vol  + 1) % (SLIDER_MAX + 1); apply_audio_settings(g); break;
+        case 1: g->sfx_vol    = (g->sfx_vol    + 1) % (SLIDER_MAX + 1); apply_audio_settings(g); break;
+        case 2:
+            g->brightness = (g->brightness + 1) % (SLIDER_MAX + 1);
+            if(g_app) apply_brightness(g, g_app->notifications);
+            break;
+        case 3: // Back
             g->menu_page = MENU_MAIN;
             g->menu_cursor = 2;
             break;
@@ -1006,14 +1043,18 @@ switch(g->scene) {
             if(g->btn_pressed & BIT_DOWN) g->menu_cursor = (g->menu_cursor + 1) % n;
         }
         // In settings, Left/Right adjusts the focused slider (not Back row).
-        if(g->menu_page == MENU_SETTINGS && g->menu_cursor < 2) {
-            uint8_t* tgt = g->menu_cursor == 0 ? &g->music_vol : &g->sfx_vol;
+        if(g->menu_page == MENU_SETTINGS && g->menu_cursor < 3) {
+            uint8_t* tgt = g->menu_cursor == 0 ? &g->music_vol
+                         : g->menu_cursor == 1 ? &g->sfx_vol
+                         : &g->brightness;
             bool changed = false;
             if(g->btn_pressed & BIT_LEFT)  { if(*tgt > 0)          { (*tgt)--; changed = true; } }
             if(g->btn_pressed & BIT_RIGHT) { if(*tgt < SLIDER_MAX) { (*tgt)++; changed = true; } }
-            if(changed) apply_audio_settings(g);
+            if(changed) {
+                if(g->menu_cursor == 2 && g_app) apply_brightness(g, g_app->notifications);
+                else                              apply_audio_settings(g);
+            }
         }
-
         if(g->btn_pressed & BIT_OK) {
             menu_activate(g);
         }
@@ -1198,10 +1239,15 @@ int32_t flipper_mario_app(void* p) {
     memset(app, 0, sizeof(*app));
     app->events = furi_message_queue_alloc(8, sizeof(InputEvent));
     app->mutex  = furi_mutex_alloc(FuriMutexTypeNormal);
+    app->notifications = furi_record_open(RECORD_NOTIFICATION);
+    // Keep the screen lit while the game is running; restore auto on exit.
+    notification_message_block(app->notifications, &sequence_display_backlight_enforce_on);
     app->running = true;
     sound_init(&app->sound);
     game_init(&app->game);
     g_app = app;
+    apply_audio_settings(&app->game);
+    apply_brightness(&app->game, app->notifications);
 
     ViewPort* viewport = view_port_alloc();
     view_port_draw_callback_set(viewport, render, app);
@@ -1247,10 +1293,12 @@ int32_t flipper_mario_app(void* p) {
 
     sound_release(&app->sound);
     // Restore default (auto-off) backlight behavior on exit.
+    notification_message_block(app->notifications, &sequence_display_backlight_enforce_auto);
     g_app = NULL;
     view_port_enabled_set(viewport, false);
     gui_remove_view_port(gui, viewport);
     view_port_free(viewport);
+    furi_record_close(RECORD_NOTIFICATION);
     furi_record_close(RECORD_GUI);
     furi_message_queue_free(app->events);
     furi_mutex_free(app->mutex);
