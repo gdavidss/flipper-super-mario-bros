@@ -167,6 +167,7 @@ typedef enum {
 
 typedef enum {
     MENU_MAIN = 0,    // Start / Controls / Settings / Quit
+    MENU_CONTROLS,    // text-only page; any input returns
     MENU_SETTINGS,    // Music / SFX / Back
 } MenuPage;
 
@@ -928,7 +929,7 @@ static void game_restart(Game* g) {
 }
 
 // Menu helpers
-#define MENU_MAIN_ITEMS     3   // Start, Settings, Quit
+#define MENU_MAIN_ITEMS     4   // Start, Controls, Settings, Quit
 #define MENU_SETTINGS_ITEMS 3   // Music, SFX, Brightness, Back
 
 static int menu_count(MenuPage p) {
@@ -944,11 +945,15 @@ static void menu_activate(Game* g) {
             game_restart(g);
             start_music();
             break;
-        case 1: // Settings
+        case 1: // Controls
+            g->menu_page = MENU_CONTROLS;
+            g->menu_cursor = 0;
+            break;
+        case 2: // Settings
             g->menu_page = MENU_SETTINGS;
             g->menu_cursor = 0;
             break;
-        case 2: // Quit
+        case 3: // Quit
             if(g_app) g_app->running = false;
             break;
         }
@@ -958,9 +963,14 @@ static void menu_activate(Game* g) {
         case 1: g->sfx_on = !g->sfx_on; break;
         case 2: // Back
             g->menu_page = MENU_MAIN;
-            g->menu_cursor = 1;
+            g->menu_cursor = 2;
             break;
         }
+    } else if(g->menu_page == MENU_CONTROLS) {
+        // Any activation returns to main menu.
+        g->menu_page = MENU_MAIN;
+        g->menu_cursor = 1;  // restore cursor on Controls
+    }
 }
 
 static void game_step(Game* g) {
@@ -979,7 +989,11 @@ switch(g->scene) {
         if(g->btn_pressed & BIT_BACK) {
             if(g->menu_page == MENU_SETTINGS) {
                 g->menu_page = MENU_MAIN;
+                g->menu_cursor = 2;
+            } else if(g->menu_page == MENU_CONTROLS) {
+                g->menu_page = MENU_MAIN;
                 g->menu_cursor = 1;
+            }
         }
         break;
     }
@@ -1057,7 +1071,7 @@ static void render(Canvas* canvas, void* ctx) {
         // ---- Menu block ----
         canvas_set_font(canvas, FontSecondary);
         if(g->menu_page == MENU_MAIN) {
-            const char* items[MENU_MAIN_ITEMS] = { "Start", "Settings", "Quit" };
+            const char* items[MENU_MAIN_ITEMS] = { "Start", "Controls", "Settings", "Quit" };
             for(int i = 0; i < MENU_MAIN_ITEMS; i++) {
                 int16_t y = 25 + i * 9;
                 if(i == g->menu_cursor) {
@@ -1086,7 +1100,13 @@ static void render(Canvas* canvas, void* ctx) {
                     else            canvas_draw_frame(canvas, cx, by, 7, 6);
                 }
             }
-}
+        } else { // MENU_CONTROLS
+            canvas_draw_str(canvas, 6, 25, "Arrows: move");
+            canvas_draw_str(canvas, 6, 34, "Back: jump");
+            canvas_draw_str(canvas, 6, 43, "Double-tap L/R: sprint");
+            canvas_draw_str(canvas, 6, 52, "Down (big): crouch");
+            canvas_draw_str(canvas, 6, 61, "Hold OK: quit");
+        }
         // Credit only on the main page (controls/settings get the full screen).
         if(g->menu_page == MENU_MAIN) {
             const char* pre = "by Gui D";
