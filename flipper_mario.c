@@ -17,6 +17,21 @@
 #include "sprites.h"
 #include "level_format.h"
 #include "level_1_1.h"
+#include "level_1_2.h"
+#include "level_1_3.h"
+#include "level_1_4.h"
+#include "level_2_1.h"
+#include "level_2_2.h"
+#include "level_2_3.h"
+#include "level_2_4.h"
+#include "level_3_1.h"
+#include "level_3_2.h"
+#include "level_3_3.h"
+#include "level_3_4.h"
+#include "level_4_1.h"
+#include "level_4_2.h"
+#include "level_4_3.h"
+#include "level_4_4.h"
 #include "sound.h"
 
 // Runtime tile grid (one definition for the whole app).
@@ -26,6 +41,21 @@ uint8_t level_grid[LEVEL_H][LEVEL_W];
 // SMB1 timer: 400 for normal levels, 300 for castle (X-4) levels.
 static const Level levels[] = {
     { "1-1", 400, level_1_1_src, LEVEL_1_1_ENEMY_COUNT, enemy_spawns_1_1 },
+    { "1-2", 400, level_1_2_src, LEVEL_1_2_ENEMY_COUNT, enemy_spawns_1_2 },
+    { "1-3", 300, level_1_3_src, LEVEL_1_3_ENEMY_COUNT, enemy_spawns_1_3 },
+    { "1-4", 300, level_1_4_src, LEVEL_1_4_ENEMY_COUNT, enemy_spawns_1_4 },
+    { "2-1", 400, level_2_1_src, LEVEL_2_1_ENEMY_COUNT, enemy_spawns_2_1 },
+    { "2-2", 400, level_2_2_src, LEVEL_2_2_ENEMY_COUNT, enemy_spawns_2_2 },
+    { "2-3", 300, level_2_3_src, LEVEL_2_3_ENEMY_COUNT, enemy_spawns_2_3 },
+    { "2-4", 300, level_2_4_src, LEVEL_2_4_ENEMY_COUNT, enemy_spawns_2_4 },
+    { "3-1", 400, level_3_1_src, LEVEL_3_1_ENEMY_COUNT, enemy_spawns_3_1 },
+    { "3-2", 400, level_3_2_src, LEVEL_3_2_ENEMY_COUNT, enemy_spawns_3_2 },
+    { "3-3", 300, level_3_3_src, LEVEL_3_3_ENEMY_COUNT, enemy_spawns_3_3 },
+    { "3-4", 300, level_3_4_src, LEVEL_3_4_ENEMY_COUNT, enemy_spawns_3_4 },
+    { "4-1", 400, level_4_1_src, LEVEL_4_1_ENEMY_COUNT, enemy_spawns_4_1 },
+    { "4-2", 400, level_4_2_src, LEVEL_4_2_ENEMY_COUNT, enemy_spawns_4_2 },
+    { "4-3", 300, level_4_3_src, LEVEL_4_3_ENEMY_COUNT, enemy_spawns_4_3 },
+    { "4-4", 300, level_4_4_src, LEVEL_4_4_ENEMY_COUNT, enemy_spawns_4_4 },
 };
 #define NUM_LEVELS ((int)(sizeof(levels) / sizeof(Level)))
 
