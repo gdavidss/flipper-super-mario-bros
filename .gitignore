@@ -1,0 +1,19 @@
+# SMB1/SMW disassembly reference (not part of this repo)
+smw/
+
+# ufbt build artifacts
+dist/
+.ufbt/
+
+# IDE
+.vscode/
+compile_commands.json
+
+# OS
+.DS_Store
+
+# Misc
+*.o
+*.d
+*.elf
+*.fap
