@@ -855,12 +855,31 @@ static void draw_number(Canvas* c, int16_t x, int16_t y, uint32_t v, uint8_t pad
 }
 
 static void draw_hud(Canvas* c, Game* g) {
+    // If the visible row-0 has any solid tile behind the HUD (underground
+    // ceiling, castle bricks, etc.), invert the HUD (black box + white text)
+    // so it stays readable. Otherwise just paint black text on the sky.
+    bool invert = false;
+    int16_t cam_tx = g->cam_x / TILE;
+    for(int dx = 0; dx <= VIEW_TILES_W; dx++) {
+        int tx = cam_tx + dx;
+        if(tx < 0 || tx >= LEVEL_W) continue;
+        uint8_t t = level_grid[0][tx];
+        if(t != T_AIR && t != T_CLOUD && t != T_BUSH) { invert = true; break; }
+    }
     canvas_set_font(c, FontSecondary);
+    if(invert) {
+        canvas_set_color(c, ColorBlack);
+        canvas_draw_box(c, 0, 0, SCREEN_W, 9);
+        canvas_set_color(c, ColorWhite);
+    } else {
+        canvas_set_color(c, ColorBlack);
+    }
     char line[24];
     snprintf(line, sizeof(line), "%06lu  x%u", (unsigned long)g->score, g->lives);
     canvas_draw_str(c, 1, 7, line);
     snprintf(line, sizeof(line), "C:%02u T:%03u", g->coins, g->timer_seconds);
     canvas_draw_str(c, 70, 7, line);
+    canvas_set_color(c, ColorBlack);
     (void)draw_number;
 }
 
