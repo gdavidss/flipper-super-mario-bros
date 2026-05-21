@@ -65,7 +65,7 @@ static const Level levels[] = {
     { "2-3", 300, level_2_3_src, LEVEL_2_3_ENEMY_COUNT, enemy_spawns_2_3 },
     { "2-4", 300, level_2_4_src, LEVEL_2_4_ENEMY_COUNT, enemy_spawns_2_4 },
     { "3-1", 400, level_3_1_src, LEVEL_3_1_ENEMY_COUNT, enemy_spawns_3_1 },
-    { "3-2", 400, level_3_2_src, LEVEL_3_2_ENEMY_COUNT, enemy_spawns_3_2 },
+    { "3-2", 300, level_3_2_src, LEVEL_3_2_ENEMY_COUNT, enemy_spawns_3_2 },
     { "3-3", 300, level_3_3_src, LEVEL_3_3_ENEMY_COUNT, enemy_spawns_3_3 },
     { "3-4", 300, level_3_4_src, LEVEL_3_4_ENEMY_COUNT, enemy_spawns_3_4 },
     { "4-1", 400, level_4_1_src, LEVEL_4_1_ENEMY_COUNT, enemy_spawns_4_1 },
@@ -165,6 +165,11 @@ typedef enum {
     SCENE_WIN,
 } Scene;
 
+typedef enum {
+    MENU_MAIN = 0,    // Start / Controls / Settings / Quit
+    MENU_SETTINGS,    // Music / SFX / Back
+} MenuPage;
+
 typedef struct Game {
     Scene scene;
     uint32_t frame;
@@ -209,6 +214,8 @@ typedef struct Game {
     uint8_t  btn_pressed; // edge-triggered, cleared each frame after consumption
 
     // UI state
+    MenuPage menu_page;
+    uint8_t  menu_cursor;       // selected row in current menu page
 
     // Settings
     bool     music_on;
@@ -871,7 +878,7 @@ typedef struct App {
 
 static App* g_app = NULL;
 static void sfx(SfxId id) {
-    if(!g_app) return;
+    if(!g_app || !g_app->game.sfx_on) return;
     sound_play_sfx(&g_app->sound, id);
 }
 
@@ -895,16 +902,24 @@ static void load_level(Game* g, uint8_t idx) {
 static void game_init(Game* g) {
     memset(g, 0, sizeof(*g));
     g->scene = SCENE_TITLE;
+    g->menu_page = MENU_MAIN;
+    g->menu_cursor = 0;
     g->lives = 3;
+    g->music_on = true;
+    g->sfx_on = true;
     load_level(g, 0);
 }
 
 static void game_restart(Game* g) {
     // Preserve user settings + carry-over lives/score across the wipe.
+    bool music_on = g->music_on;
+    bool sfx_on = g->sfx_on;
     uint8_t lives = g->lives;
     uint16_t score = g->score;
     memset(g, 0, sizeof(*g));
     g->scene = SCENE_PLAY;
+    g->music_on = music_on;
+    g->sfx_on = sfx_on;
     g->lives = lives ? lives : 3;
     g->score = score;
     load_level(g, 0);  // start over at the first level
@@ -912,13 +927,62 @@ static void game_restart(Game* g) {
     g->pdir = 1;
 }
 
+// Menu helpers
+#define MENU_MAIN_ITEMS     3   // Start, Settings, Quit
+#define MENU_SETTINGS_ITEMS 3   // Music, SFX, Brightness, Back
+
+static int menu_count(MenuPage p) {
+    if(p == MENU_MAIN)     return MENU_MAIN_ITEMS;
+    if(p == MENU_SETTINGS) return MENU_SETTINGS_ITEMS;
+    return 0;  // MENU_CONTROLS - no items, any input returns
+}
+
+static void menu_activate(Game* g) {
+    if(g->menu_page == MENU_MAIN) {
+        switch(g->menu_cursor) {
+        case 0: // Start
+            game_restart(g);
+            start_music();
+            break;
+        case 1: // Settings
+            g->menu_page = MENU_SETTINGS;
+            g->menu_cursor = 0;
+            break;
+        case 2: // Quit
+            if(g_app) g_app->running = false;
+            break;
+        }
+    } else if(g->menu_page == MENU_SETTINGS) {
+        switch(g->menu_cursor) {
+        case 0: g->music_on = !g->music_on; break;
+        case 1: g->sfx_on = !g->sfx_on; break;
+        case 2: // Back
+            g->menu_page = MENU_MAIN;
+            g->menu_cursor = 1;
+            break;
+        }
+}
+
 static void game_step(Game* g) {
     Scene before = g->scene;
     g->frame++;
 switch(g->scene) {
-    case SCENE_TITLE:
-        if(g->btn_pressed & BIT_OK) game_restart(g);
+    case SCENE_TITLE: {
+        int n = menu_count(g->menu_page);
+        if(n > 0) {
+            if(g->btn_pressed & BIT_UP)   g->menu_cursor = (g->menu_cursor + n - 1) % n;
+            if(g->btn_pressed & BIT_DOWN) g->menu_cursor = (g->menu_cursor + 1) % n;
+        }
+        if(g->btn_pressed & BIT_OK) {
+            menu_activate(g);
+        }
+        if(g->btn_pressed & BIT_BACK) {
+            if(g->menu_page == MENU_SETTINGS) {
+                g->menu_page = MENU_MAIN;
+                g->menu_cursor = 1;
+        }
         break;
+    }
     case SCENE_PLAY:
         if(g->level_clear_timer) {
             // Holding for the win jingle. Tick down, then advance.
@@ -943,7 +1007,9 @@ switch(g->scene) {
         if(g->gameover_timer < 255) g->gameover_timer++;
         if(g->gameover_timer > 100 || (g->btn_pressed & (BIT_OK | BIT_BACK))) {
             g->scene = SCENE_TITLE;
-                            g->lives = 3;
+            g->menu_page = MENU_MAIN;
+            g->menu_cursor = 0;
+            g->lives = 3;
             g->score = 0;
             g->coins = 0;
             g->gameover_timer = 0;
@@ -952,7 +1018,9 @@ switch(g->scene) {
     case SCENE_WIN:
         if(g->btn_pressed & (BIT_OK | BIT_BACK)) {
             g->scene = SCENE_TITLE;
-                            g->lives = 3;
+            g->menu_page = MENU_MAIN;
+            g->menu_cursor = 0;
+            g->lives = 3;
             g->score = 0;
             g->coins = 0;
         }
@@ -972,12 +1040,67 @@ static void render(Canvas* canvas, void* ctx) {
     Game* g = &app->game;
     canvas_clear(canvas);
     switch(g->scene) {
-    case SCENE_TITLE:
+    case SCENE_TITLE: {
+        // ---- Logo block ----
+        // "SUPER MARIO BROS" centered in FontPrimary, flanked by a Mario
+        // sprite (left, facing right) and a Mushroom sprite (right), framed
+        // top and bottom by a 1-px horizontal line for a "marquee" feel.
         canvas_set_font(canvas, FontPrimary);
-        draw_centered(canvas, 22, "SUPER MARIO BROS");
+        const char* title = "SUPER MARIO BROS";
+        int tw = canvas_string_width(canvas, title);
+        int tx = (SCREEN_W - tw) / 2;
+        canvas_draw_str(canvas, tx, 11, title);
+        // Mario sprite to the left of the title (8x8).
+        if(tx >= 12) draw_sprite(canvas, tx - 11, 4, spr_mario_stand);
+        // Mushroom to the right.
+        if(tx + tw + 11 <= SCREEN_W) draw_sprite(canvas, tx + tw + 3, 4, spr_mushroom);
+        // ---- Menu block ----
         canvas_set_font(canvas, FontSecondary);
-        draw_centered(canvas, 38, "Press OK to start");
+        if(g->menu_page == MENU_MAIN) {
+            const char* items[MENU_MAIN_ITEMS] = { "Start", "Settings", "Quit" };
+            for(int i = 0; i < MENU_MAIN_ITEMS; i++) {
+                int16_t y = 25 + i * 9;
+                if(i == g->menu_cursor) {
+                    canvas_draw_str(canvas, 36, y, ">");
+                }
+                canvas_draw_str(canvas, 46, y, items[i]);
+            }
+        } else if(g->menu_page == MENU_SETTINGS) {
+            const char* labels[3] = { "Music", "SFX", "Bright" };
+            uint8_t vals[3] = { g->music_vol, g->sfx_vol, g->brightness };
+            for(int i = 0; i < MENU_SETTINGS_ITEMS; i++) {
+                int16_t y = 25 + i * 9;
+                if(i == g->menu_cursor) {
+                    canvas_draw_str(canvas, 4, y, ">");
+                }
+                if(i == 3) {
+                    canvas_draw_str(canvas, 14, y, "Back");
+                    continue;
+                }
+                canvas_draw_str(canvas, 14, y, labels[i]);
+                // Bar: 5 outlined cells, fill the first `vals[i]`.
+                int16_t bx = 64, by = y - 6;
+                for(int k = 0; k < 5; k++) {
+                    int16_t cx = bx + k * 9;
+                    if(k < vals[i]) canvas_draw_box(canvas, cx, by, 7, 6);
+                    else            canvas_draw_frame(canvas, cx, by, 7, 6);
+                }
+            }
+}
+        // Credit only on the main page (controls/settings get the full screen).
+        if(g->menu_page == MENU_MAIN) {
+            const char* pre = "by Gui D";
+            const char* full = "by Gui David";
+            int full_w = canvas_string_width(canvas, full);
+            int x0 = (SCREEN_W - full_w) / 2;
+            canvas_draw_str(canvas, x0, 62, full);
+            int pre_w = canvas_string_width(canvas, pre);
+            int ax = x0 + pre_w + 1;
+            canvas_draw_dot(canvas, ax + 2, 55);
+            canvas_draw_dot(canvas, ax + 1, 56);
+        }
         break;
+    }
     case SCENE_PLAY:
         draw_world(canvas, g);
         draw_enemies(canvas, g);
