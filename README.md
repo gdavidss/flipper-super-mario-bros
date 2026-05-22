@@ -2,8 +2,8 @@
 
 A side-scrolling platformer for the Flipper Zero, ported from the 1985 NES *Super Mario Bros.* The level geometry, physics, and music are derived from the published [SMB1 disassembly (SMBDIS.ASM)](https://github.com/nwoeanhinnogaehr/smb-assembler), scaled down to a 128×64 1-bit screen.
 
-![Side-by-side: Flipper port vs NES SMB1 — world 1-1](docs/comparison_1-1.png)
-![Big Mario jumping a pipe — both sides of 1-1](docs/comparison_1-1_jump.png)
+![Flipper port — world 1-1 gameplay (Mario, Goomba, pipes, ?-blocks)](docs/flipper_1-1.png)
+![Flipper port — Mario mid-jump over two Goombas on 1-1](docs/flipper_1-1_jump.png)
 
 ## Features
 
