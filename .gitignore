@@ -17,3 +17,5 @@ compile_commands.json
 *.d
 *.elf
 *.fap
+# but ship the versioned release artifact
+!releases/*.fap
